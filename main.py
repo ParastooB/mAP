@@ -10,6 +10,8 @@ import math
 import numpy as np
 
 MINOVERLAP = 0.5 # default value (defined in the PASCAL VOC2012 challenge)
+SIZEofImage = 512.0
+MinHumanSize = 30.0
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-na', '--no-animation', help="no animation is shown.", action="store_true")
@@ -361,6 +363,7 @@ ground_truth_files_list.sort()
 gt_counter_per_class = {}
 counter_images_per_class = {}
 
+dumbpeople = 0
 for txt_file in ground_truth_files_list:
     #print(txt_file)
     file_id = txt_file.split(".txt", 1)[0]
@@ -392,6 +395,10 @@ for txt_file in ground_truth_files_list:
             error(error_msg)
         # check if class is in the ignore list, if yes skip
         if class_name in args.ignore:
+            continue
+        if (float(bottom)-float(top)) < float(MinHumanSize/SIZEofImage):
+            dumbpeople = dumbpeople+1
+            print(dumbpeople)
             continue
         bbox = left + " " + top + " " + right + " " +bottom
         if is_difficult:
@@ -457,6 +464,8 @@ if specific_iou_flagged:
 # get a list with the detection-results files
 dr_files_list = glob.glob(DR_PATH + '/*.txt')
 dr_files_list.sort()
+dumbpeople = 0
+
 
 for class_index, class_name in enumerate(gt_classes):
     bounding_boxes = []
@@ -482,6 +491,10 @@ for class_index, class_name in enumerate(gt_classes):
                 error(error_msg)
             if tmp_class_name == class_name:
                 #print("match")
+                if (float(bottom)-float(top)) < float(MinHumanSize/SIZEofImage):
+                    dumbpeople = dumbpeople+1
+                    print(dumbpeople)
+                    continue
                 bbox = left + " " + top + " " + right + " " +bottom
                 bounding_boxes.append({"confidence":confidence, "file_id":file_id, "bbox":bbox})
                 #print(bounding_boxes)
@@ -632,17 +645,19 @@ with open(results_files_path + "/results.txt", 'w') as results_file:
 
                 font = cv2.FONT_HERSHEY_SIMPLEX
                 if ovmax > 0: # if there is intersections between the bounding-boxes
-                    bbgt = [ int(round(float(x))) for x in gt_match["bbox"].split() ]
+                    # boxes where less than 0 for some reason
+                    bbgt = [ int(round(float(x)*SIZEofImage)) for x in gt_match["bbox"].split() ]
                     cv2.rectangle(img,(bbgt[0],bbgt[1]),(bbgt[2],bbgt[3]),light_blue,2)
                     cv2.rectangle(img_cumulative,(bbgt[0],bbgt[1]),(bbgt[2],bbgt[3]),light_blue,2)
                     cv2.putText(img_cumulative, class_name, (bbgt[0],bbgt[1] - 5), font, 0.6, light_blue, 1, cv2.LINE_AA)
-                bb = [int(i) for i in bb]
+                # boxes where less than 0 for some reason
+                bb = [int(i*SIZEofImage) for i in bb]
                 cv2.rectangle(img,(bb[0],bb[1]),(bb[2],bb[3]),color,2)
                 cv2.rectangle(img_cumulative,(bb[0],bb[1]),(bb[2],bb[3]),color,2)
                 cv2.putText(img_cumulative, class_name, (bb[0],bb[1] - 5), font, 0.6, color, 1, cv2.LINE_AA)
                 # show image
                 cv2.imshow("Animation", img)
-                cv2.waitKey(20) # show for 20 ms
+                cv2.waitKey(500) # show for 20 ms
                 # save image to results
                 output_img_path = results_files_path + "/images/detections_one_by_one/" + class_name + "_detection" + str(idx) + ".jpg"
                 cv2.imwrite(output_img_path, img)
