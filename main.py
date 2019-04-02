@@ -11,7 +11,7 @@ import numpy as np
 
 MINOVERLAP = 0.5 # default value (defined in the PASCAL VOC2012 challenge)
 SIZEofImage = 512.0
-MinHumanSize = 30.0
+MinHumanSize = 50.0
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-na', '--no-animation', help="no animation is shown.", action="store_true")
@@ -572,9 +572,13 @@ with open(results_files_path + "/results.txt", 'w') as results_file:
                                         + 1) * (bbgt[3] - bbgt[1] + 1) - iw * ih
                         ov = iw * ih / ua
                         if ov > ovmax:
-                            ovmax = ov
-                            gt_match = obj
-
+                            if not bool(obj["used"]):
+                                ovmax = ov
+                                gt_match = obj
+                            else:
+                                print(ov)
+            if gt_match == -1:
+                gt_match = obj
             # assign detection as true positive/don't care/false positive
             if show_animation:
                 status = "NO MATCH FOUND!" # status is only used in the animation
@@ -644,7 +648,8 @@ with open(results_files_path + "/results.txt", 'w') as results_file:
                 img, line_width = draw_text_in_image(img, text, (margin + line_width, v_pos), color, line_width)
 
                 font = cv2.FONT_HERSHEY_SIMPLEX
-                if ovmax > 0: # if there is intersections between the bounding-boxes
+                # if ovmax > 0: # if there is intersections between the bounding-boxes
+                if True: 
                     # boxes where less than 0 for some reason
                     bbgt = [ int(round(float(x)*SIZEofImage)) for x in gt_match["bbox"].split() ]
                     cv2.rectangle(img,(bbgt[0],bbgt[1]),(bbgt[2],bbgt[3]),light_blue,2)
@@ -657,7 +662,7 @@ with open(results_files_path + "/results.txt", 'w') as results_file:
                 cv2.putText(img_cumulative, class_name, (bb[0],bb[1] - 5), font, 0.6, color, 1, cv2.LINE_AA)
                 # show image
                 cv2.imshow("Animation", img)
-                cv2.waitKey(500) # show for 20 ms
+                cv2.waitKey(20) # show for 20 ms
                 # save image to results
                 output_img_path = results_files_path + "/images/detections_one_by_one/" + class_name + "_detection" + str(idx) + ".jpg"
                 cv2.imwrite(output_img_path, img)
