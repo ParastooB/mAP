@@ -136,9 +136,10 @@ def mr_fppi(tps, fps, num_images, num_annotations):
     """ Compute a list of miss-rate FPPI values that can be plotted into a graph.
 
     Args:
-        detections (dict): Detection objects per image
-        ground_truth (dict): Annotation objects per image
-        overlap_threshold (Number, optional): Minimum iou threshold for true positive; Default **0.5**
+        tps (array): cumulative sum of true positives
+        fps (array): cumulative sum of false positives
+        num_images number of images
+        num_annotations all tp and fp
 
     Returns:
         tuple: **[miss-rate_values]**, **[fppi_values]**
