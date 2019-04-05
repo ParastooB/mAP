@@ -21,6 +21,10 @@ parser.add_argument('-q', '--quiet', help="minimalistic console output.", action
 parser.add_argument('-i', '--ignore', nargs='+', type=str, help="ignore a list of classes.")
 # argparse receiving list of classes with specific IoU (e.g., python main.py --set-class-iou person 0.7)
 parser.add_argument('--set-class-iou', nargs='+', type=str, help="set IoU for a specific class.")
+parser.add_argument("--gt", type=str, default=os.path.join(os.getcwd(), 'input', 'ground-truth'), help="Absolute path to the ground-truth annotations")
+parser.add_argument("--dr", type=str, default=os.path.join(os.getcwd(), 'input', 'detection-results'),help="Absolute path to the detected annotations")
+parser.add_argument("--im", type=str, default=os.path.join(os.getcwd(), 'input', 'images-optional'),help="Absolute path to the images")
+
 args = parser.parse_args()
 
 '''
@@ -46,10 +50,15 @@ if args.set_class_iou is not None:
 # make sure that the cwd() is the location of the python script (so that every path makes sense)
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-GT_PATH = os.path.join(os.getcwd(), 'input', 'ground-truth')
-DR_PATH = os.path.join(os.getcwd(), 'input', 'detection-results')
+# GT_PATH = os.path.join(os.getcwd(), 'input', 'ground-truth')
+# DR_PATH = os.path.join(os.getcwd(), 'input', 'detection-results')
+# # if there are no images then no animation can be shown
+# IMG_PATH = os.path.join(os.getcwd(), 'input', 'images-optional')
+
+GT_PATH = args.gt
+DR_PATH = args.dr
 # if there are no images then no animation can be shown
-IMG_PATH = os.path.join(os.getcwd(), 'input', 'images-optional')
+IMG_PATH = args.im
 if os.path.exists(IMG_PATH): 
     for dirpath, dirnames, files in os.walk(IMG_PATH):
         if not files:
@@ -119,7 +128,31 @@ def log_average_miss_rate(precision, fp_cumsum, num_images):
     # log(0) is undefined, so we use the np.maximum(1e-10, ref)
     lamr = math.exp(np.mean(np.log(np.maximum(1e-10, ref))))
 
+    print(len(mr))
     return lamr, mr, fppi
+
+
+def mr_fppi(tps, fps, num_images, num_annotations):
+    """ Compute a list of miss-rate FPPI values that can be plotted into a graph.
+
+    Args:
+        detections (dict): Detection objects per image
+        ground_truth (dict): Annotation objects per image
+        overlap_threshold (Number, optional): Minimum iou threshold for true positive; Default **0.5**
+
+    Returns:
+        tuple: **[miss-rate_values]**, **[fppi_values]**
+    """
+
+    miss_rate = []
+    fppi = []
+    # num_annotations all the boxes in dr
+    for tp, fp in zip(tps, fps):
+        miss_rate.append(1 - (float(tp) / float(num_annotations)))
+        fppi.append(float(fp) / float(num_images))
+
+    return miss_rate, fppi
+
 
 """
  throw error and exit
@@ -398,7 +431,7 @@ for txt_file in ground_truth_files_list:
             continue
         if (float(bottom)-float(top)) < float(MinHumanSize/SIZEofImage):
             dumbpeople = dumbpeople+1
-            print(dumbpeople)
+            # print(dumbpeople)
             continue
         bbox = left + " " + top + " " + right + " " +bottom
         if is_difficult:
@@ -469,6 +502,7 @@ dumbpeople = 0
 
 for class_index, class_name in enumerate(gt_classes):
     bounding_boxes = []
+    dr_box_counter = 0
     for txt_file in dr_files_list:
         #print(txt_file)
         # the first time it checks if all the corresponding ground-truth files exist
@@ -493,10 +527,11 @@ for class_index, class_name in enumerate(gt_classes):
                 #print("match")
                 if (float(bottom)-float(top)) < float(MinHumanSize/SIZEofImage):
                     dumbpeople = dumbpeople+1
-                    print(dumbpeople)
+                    # print(dumbpeople)
                     continue
                 bbox = left + " " + top + " " + right + " " +bottom
                 bounding_boxes.append({"confidence":confidence, "file_id":file_id, "bbox":bbox})
+                dr_box_counter += 1
                 #print(bounding_boxes)
     # sort detection-results by decreasing confidence
     bounding_boxes.sort(key=lambda x:float(x['confidence']), reverse=True)
@@ -575,8 +610,8 @@ with open(results_files_path + "/results.txt", 'w') as results_file:
                             if not bool(obj["used"]):
                                 ovmax = ov
                                 gt_match = obj
-                            else:
-                                print(ov)
+                            # else:
+                                # print(ov)
             if gt_match == -1:
                 gt_match = obj
             # assign detection as true positive/don't care/false positive
@@ -672,6 +707,7 @@ with open(results_files_path + "/results.txt", 'w') as results_file:
         #print(tp)
         # compute precision/recall
         cumsum = 0
+        fps = fp
         for idx, val in enumerate(fp):
             fp[idx] += cumsum
             cumsum += val
@@ -679,7 +715,7 @@ with open(results_files_path + "/results.txt", 'w') as results_file:
         for idx, val in enumerate(tp):
             tp[idx] += cumsum
             cumsum += val
-        #print(tp)
+        tps = tp
         rec = tp[:]
         for idx, val in enumerate(tp):
             rec[idx] = float(tp[idx]) / gt_counter_per_class[class_name]
@@ -704,13 +740,16 @@ with open(results_files_path + "/results.txt", 'w') as results_file:
 
         n_images = counter_images_per_class[class_name]
         lamr, mr, fppi = log_average_miss_rate(np.array(rec), np.array(fp), n_images)
+        miis_rate, fppii = mr_fppi(tps, fps, n_images, dr_box_counter)
+        plt.plot(fppii,miis_rate)
+        plt.xscale('log')
+        plt.show()
         lamr_dictionary[class_name] = lamr
 
         """
          Draw plot
         """
         if draw_plot:
-            plt.plot(rec, prec, '-o')
             # add a new penultimate point to the list (mrec[-2], 0.0)
             # since the last line segment (and respective area) do not affect the AP value
             area_under_curve_x = mrec[:-1] + [mrec[-2]] + [mrec[-1]]
@@ -882,7 +921,7 @@ if draw_plot:
     plot_title = "mAP = {0:.2f}%".format(mAP*100)
     x_label = "Average Precision"
     output_path = results_files_path + "/mAP.png"
-    to_show = True
+    to_show = False
     plot_color = 'royalblue'
     draw_plot_func(
         ap_dictionary,
