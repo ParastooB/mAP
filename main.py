@@ -15,6 +15,7 @@ MinHumanSize = 50.0
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-na', '--no-animation', help="no animation is shown.", action="store_true")
+parser.add_argument('--old', help="no improvements in the code", action="store_true")
 parser.add_argument('-np', '--no-plot', help="no plot is shown.", action="store_true")
 parser.add_argument('-q', '--quiet', help="minimalistic console output.", action="store_true")
 # argparse receiving list of classes to be ignored
@@ -46,6 +47,7 @@ if args.ignore is None:
 specific_iou_flagged = False
 if args.set_class_iou is not None:
     specific_iou_flagged = True
+
 
 # make sure that the cwd() is the location of the python script (so that every path makes sense)
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -430,7 +432,8 @@ for txt_file in ground_truth_files_list:
         # check if class is in the ignore list, if yes skip
         if class_name in args.ignore:
             continue
-        if (float(bottom)-float(top)) < float(MinHumanSize/SIZEofImage):
+        # NEW CHANGES 
+        if ((float(bottom)-float(top)) < float(MinHumanSize/SIZEofImage)) and (not args.old):
             dumbpeople = dumbpeople+1
             # print(dumbpeople)
             continue
@@ -526,7 +529,8 @@ for class_index, class_name in enumerate(gt_classes):
                 error(error_msg)
             if tmp_class_name == class_name:
                 #print("match")
-                if (float(bottom)-float(top)) < float(MinHumanSize/SIZEofImage):
+                # NEW CHANGES
+                if ((float(bottom)-float(top)) < float(MinHumanSize/SIZEofImage)) and (not args.old):
                     dumbpeople = dumbpeople+1
                     # print(dumbpeople)
                     continue
@@ -608,12 +612,17 @@ with open(results_files_path + "/results.txt", 'w') as results_file:
                                         + 1) * (bbgt[3] - bbgt[1] + 1) - iw * ih
                         ov = iw * ih / ua
                         if ov > ovmax:
-                            if not bool(obj["used"]):
+                            # NEW CHANGES
+                            # if True:
+                            if (args.old):
+                                ovmax = ov
+                                gt_match = obj
+                            elif (not bool(obj["used"])):
                                 ovmax = ov
                                 gt_match = obj
                             # else:
                                 # print(ov)
-            if gt_match == -1:
+            if (gt_match == -1):
                 gt_match = obj
             # assign detection as true positive/don't care/false positive
             if show_animation:
@@ -744,7 +753,11 @@ with open(results_files_path + "/results.txt", 'w') as results_file:
         miis_rate, fppii = mr_fppi(tps, fps, n_images, dr_box_counter)
         plt.plot(fppii,miis_rate)
         plt.xscale('log')
-        plt.show()
+        plt.ylabel('miss rate')
+        plt.xlabel('false positive per image')
+        plt.title("mr vs fppi")
+        plt.savefig("./results/mr-fppi.jpg")
+        results_file.write(text + "\n MR: " + str(miis_rate) + "\n FPPI :" + str(fppii) + "\n\n")
         lamr_dictionary[class_name] = lamr
 
         """
@@ -783,6 +796,10 @@ with open(results_files_path + "/results.txt", 'w') as results_file:
     results_file.write("\n# mAP of all classes\n")
     mAP = sum_AP / n_classes
     text = "mAP = {0:.2f}%".format(mAP*100)
+    results_file.write(text + "\n")
+    print(text)
+    results_file.write("\n# log_average_miss_rate of all classes\n")
+    text = "lamr = {0:.2f}%".format(lamr*100)
     results_file.write(text + "\n")
     print(text)
 
